@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib import messages
-from django.http import HttpResponseForbidden, JsonResponse
+from django.http import HttpResponseForbidden
 from .forms import CustomUserCreationForm, GameForm, CustomUserEditForm, CommentForm, ReviewForm, RoleChangeForm, FileUploadForm
 from .models import Game, Review, Comment, CustomUser
 from .utils import get_game_info, upload_to_storage
@@ -195,39 +195,19 @@ def game_detail(request, game_id):
 
 @login_required
 def create_game(request):
-    # Restrict access to only admin users
     if not request.user.role == 'admin':
         return HttpResponseForbidden("You are not authorized to create games.")
 
     if request.method == 'POST':
-        form = GameForm(request.POST, request.FILES)  # Include request.FILES to handle file uploads
+        form = GameForm(request.POST, request.FILES)  # Include request.FILES
         if form.is_valid():
-            try:
-                # Save the form and upload the file
-                game = form.save()
-
-                # Debugging: Log the uploaded file URL
-                if game.image:  # Assuming `image` is the upload field
-                    print(f"File uploaded to: {game.image.url}")
-
-                # Redirect to the home page after successful save
-                return redirect('home')
-            except Exception as e:
-                # Log the exception for debugging
-                print(f"Error during file upload: {e}")
-
-                # Optionally, return a JSON response with error details
-                return JsonResponse({'error': 'An error occurred while saving the game or uploading the file.'}, status=500)
-        else:
-            # If form validation fails, log errors
-            print(f"Form errors: {form.errors}")
-
+            game = form.save()  # Automatically handles uploaded files
+            return redirect('home')
     else:
-        # Initialize a blank form for GET requests
         form = GameForm()
 
-    # Render the form template
     return render(request, 'core/create_game.html', {'form': form})
+
 
 @login_required
 def edit_game(request, game_id):
