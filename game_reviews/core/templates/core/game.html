@@ -1,4 +1,6 @@
 {% extends "core/base.html" %}
+{% load custom_filters %}
+
 
 {% block title %}{{ game.title }}{% endblock %}
 
@@ -67,42 +69,130 @@
 
 
 <h3>Comments</h3>
+    {% if user.is_authenticated and user.role == 'admin' %}
+        <form action="{% url 'import_steam_comments' game.id %}" method="post" style="margin-bottom: 15px;">
+        {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-outline-primary">
+                📥 Import Top Comments from Steam
+            </button>
+        </form>
+    {% endif %}
+<!-- Dropdown for number of comments per page -->
+<form method="get" style="margin-bottom: 10px;">
+    <label for="comments_per_page">Comments per page:</label>
+    <select name="comments_per_page" id="comments_per_page" onchange="this.form.submit()">
+        <option value="5" {% if comments_per_page == 5 %}selected{% endif %}>5</option>
+        <option value="10" {% if comments_per_page == 10 %}selected{% endif %}>10</option>
+        <option value="20" {% if comments_per_page == 20 %}selected{% endif %}>20</option>
+    </select>
+</form>
+
+
+
+{% if messages %}
+    <div class="alert-section">
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
 {% if comments %}
     <ul>
         {% for comment in comments %}
             <li>
-                <p><strong>{{ comment.user.username }}</strong>:</p>
-                <p>{{ comment.comment }}</p>
+                <p><strong>{{ comment.user.username }}</strong>: {{ comment.comment }}</p>
                 <p><small>Posted on {{ comment.created }}</small></p>
 
-                <!-- Display delete button for moderators -->
+                <!-- Like Button for Comments -->
+                <form class="like-form" data-comment-id="{{ comment.id }}">
+                    <button type="button" class="btn btn-sm btn-outline-primary like-btn">
+                        👍 Like (<span id="like-count-{{ comment.id }}">{{ comment.like_set.count }}</span>)
+                    </button>
+                </form>
+
+                <!-- Reply Button -->
+                <button class="btn btn-sm btn-outline-primary reply-toggle" data-comment-id="{{ comment.id }}">
+                    Reply
+                </button>
                 {% if user.is_authenticated and user.role == 'moderator' %}
-                    <form action="{% url 'delete_comment' comment.id %}" method="post" style="display:inline;">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                    </form>
+                <form action="{% url 'delete_comment' comment.id %}" method="post" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-danger">🗑️ Delete</button>
+                </form>
+                {% endif %}
+                {% if user.is_authenticated and user == comment.user %}
+                    <a href="{% url 'edit_comment' comment.id %}" class="btn btn-sm btn-warning">✏️ Edit</a>
                 {% endif %}
 
-                <!-- Display replies -->
-                {% with comment.replies.all as replies %}
-                    {% if replies %}
-                        <ul>
-                            {% for reply in replies %}
-                                <li>
-                                    <p><strong>{{ reply.user.username }}</strong>:</p>
-                                    <p>{{ reply.comment }}</p>
-                                    <p><small>Posted on {{ reply.created }}</small></p>
-                                </li>
-                            {% endfor %}
-                        </ul>
-                    {% endif %}
-                {% endwith %}
+                <!-- Reply Form -->
+                <div id="reply-form-{{ comment.id }}" class="reply-form" style="display:none;">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="parent_id" value="{{ comment.id }}">
+                        {{ comment_form.as_p }}
+                        <button type="submit" class="btn btn-sm btn-primary">Submit Reply</button>
+                    </form>
+                </div>
+
+                <!-- Paginated Replies -->
+                <ul>
+                    {% with paginated_replies|get_item:comment.id as replies %}
+                        {% for reply in replies %}
+                            <li>
+                                <p><strong>{{ reply.user.username }}</strong>: {{ reply.comment }}</p>
+                                <p><small>Posted on {{ reply.created }}</small></p>
+
+                                <!-- Like Button for Replies -->
+                                <form class="like-form" data-comment-id="{{ reply.id }}">
+                                    <button type="button" class="btn btn-sm btn-outline-primary like-btn">
+                                        👍 Like (<span id="like-count-{{ reply.id }}">{{ reply.like_set.count }}</span>)
+                                    </button>
+                                </form>
+
+                                {% if user.is_authenticated and user == reply.user %}
+                                    <a href="{% url 'edit_comment' reply.id %}" class="btn btn-sm btn-warning">✏️ Edit</a>
+                                {% endif %}
+                            <!-- Delete Button for Replies -->
+{% if user.is_authenticated and user.role == 'moderator' %}
+    <form action="{% url 'delete_comment' reply.id %}" method="post" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-danger">🗑️ Delete</button>
+    </form>
+{% endif %}
+                            </li>
+                        {% endfor %}
+                    {% endwith %}
+                </ul>
             </li>
         {% endfor %}
     </ul>
+
+    <!-- Pagination Controls for Top-Level Comments -->
+    <div class="pagination">
+        <span>Page {{ comments.number }} of {{ comments.paginator.num_pages }}.</span>
+        <div>
+            {% if comments.has_previous %}
+                <a href="?page={{ comments.previous_page_number }}&comments_per_page={{ comments_per_page }}">Previous</a>
+            {% endif %}
+            {% for num in comments.paginator.page_range %}
+                {% if comments.number == num %}
+                    <strong>{{ num }}</strong>
+                {% else %}
+                    <a href="?page={{ num }}&comments_per_page={{ comments_per_page }}">{{ num }}</a>
+                {% endif %}
+            {% endfor %}
+            {% if comments.has_next %}
+                <a href="?page={{ comments.next_page_number }}&comments_per_page={{ comments_per_page }}">Next</a>
+            {% endif %}
+        </div>
+    </div>
 {% else %}
     <p>No comments yet. Be the first to comment on this game!</p>
 {% endif %}
+
 
 
 <!-- Add comment form -->
@@ -133,18 +223,74 @@
 {% endif %}  
     <script>
 document.addEventListener("DOMContentLoaded", function() {
-    // Get all emoji elements and the comment input field
+    // Add emoji picker functionality for all textareas
     const emojis = document.querySelectorAll(".emoji");
-    const commentField = document.querySelector("#id_comment");  // Adjust selector if needed
 
     emojis.forEach(emoji => {
         emoji.addEventListener("click", function() {
-            // Append the emoji to the comment field
-            commentField.value += emoji.textContent;
-            commentField.focus();  // Bring focus back to the input field
+            const activeCommentFields = document.querySelectorAll("textarea");
+
+            // Append emoji to the currently visible textarea
+            activeCommentFields.forEach(field => {
+                if (field.offsetParent !== null) {  // Only visible fields
+                    field.value += emoji.textContent;
+                    field.focus();
+                }
+            });
         });
     });
 });
 </script>
+
+
+    <!-- JavaScript to Toggle Reply Form -->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const replyButtons = document.querySelectorAll(".reply-toggle");
+
+    replyButtons.forEach(button => {
+        button.addEventListener("click", function () {
+            const commentId = button.dataset.commentId;
+            const replyForm = document.getElementById(`reply-form-${commentId}`);
+            replyForm.style.display = replyForm.style.display === "none" ? "block" : "none";
+        });
+    });
+});
+</script>
+    <script>
+document.addEventListener("DOMContentLoaded", function () {
+    const likeForms = document.querySelectorAll(".like-form");
+
+    likeForms.forEach(form => {
+        const button = form.querySelector(".like-btn");
+
+        form.addEventListener("click", function () {
+            const commentId = form.dataset.commentId;
+            const likeCountSpan = document.getElementById(`like-count-${commentId}`);
+
+            fetch(`/comments/${commentId}/like/`, {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": "{{ csrf_token }}",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.liked) {
+                    button.classList.add("btn-primary");
+                    button.classList.remove("btn-outline-primary");
+                } else {
+                    button.classList.remove("btn-primary");
+                    button.classList.add("btn-outline-primary");
+                }
+                likeCountSpan.textContent = data.like_count;
+            })
+            .catch(error => console.error("Error:", error));
+        });
+    });
+});
+</script>
+
 
 {% endblock %}
