@@ -168,11 +168,11 @@ def game_detail(request, game_id):
             pass
 
     # Comments pagination (number of comments per page set by query parameter)
-    comments_per_page = request.GET.get('comments_per_page', 10)  # Default to 10
+    comments_per_page = request.GET.get('comments_per_page', 5)  # Default to 10
     try:
         comments_per_page = int(comments_per_page)
     except ValueError:
-        comments_per_page = 10
+        comments_per_page = 5
 
     top_level_comments = Comment.objects.filter(game=game, parent__isnull=True).select_related('user')
     paginator = Paginator(top_level_comments, comments_per_page)
@@ -189,7 +189,7 @@ def game_detail(request, game_id):
     paginated_replies = {}
     for comment in comments:
         replies = comment.replies.all()
-        reply_paginator = Paginator(replies, 5)
+        reply_paginator = Paginator(replies, 3)
         paginated_replies[comment.id] = reply_paginator.page(1)  # Show first page of replies by default
 
     # Comment form

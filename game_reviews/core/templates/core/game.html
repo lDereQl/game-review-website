@@ -117,6 +117,15 @@
                 <button class="btn btn-sm btn-outline-primary reply-toggle" data-comment-id="{{ comment.id }}">
                     Reply
                 </button>
+                {% if user.is_authenticated and user.role == 'moderator' %}
+                <form action="{% url 'delete_comment' comment.id %}" method="post" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-danger">🗑️ Delete</button>
+                </form>
+                {% endif %}
+                {% if user.is_authenticated and user == comment.user %}
+                    <a href="{% url 'edit_comment' comment.id %}" class="btn btn-sm btn-warning">✏️ Edit</a>
+                {% endif %}
 
                 <!-- Reply Form -->
                 <div id="reply-form-{{ comment.id }}" class="reply-form" style="display:none;">
@@ -142,6 +151,17 @@
                                         👍 Like (<span id="like-count-{{ reply.id }}">{{ reply.like_set.count }}</span>)
                                     </button>
                                 </form>
+
+                                {% if user.is_authenticated and user == reply.user %}
+                                    <a href="{% url 'edit_comment' reply.id %}" class="btn btn-sm btn-warning">✏️ Edit</a>
+                                {% endif %}
+                            <!-- Delete Button for Replies -->
+{% if user.is_authenticated and user.role == 'moderator' %}
+    <form action="{% url 'delete_comment' reply.id %}" method="post" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-danger">🗑️ Delete</button>
+    </form>
+{% endif %}
                             </li>
                         {% endfor %}
                     {% endwith %}
@@ -203,19 +223,25 @@
 {% endif %}  
     <script>
 document.addEventListener("DOMContentLoaded", function() {
-    // Get all emoji elements and the comment input field
+    // Add emoji picker functionality for all textareas
     const emojis = document.querySelectorAll(".emoji");
-    const commentField = document.querySelector("#id_comment");  // Adjust selector if needed
 
     emojis.forEach(emoji => {
         emoji.addEventListener("click", function() {
-            // Append the emoji to the comment field
-            commentField.value += emoji.textContent;
-            commentField.focus();  // Bring focus back to the input field
+            const activeCommentFields = document.querySelectorAll("textarea");
+
+            // Append emoji to the currently visible textarea
+            activeCommentFields.forEach(field => {
+                if (field.offsetParent !== null) {  // Only visible fields
+                    field.value += emoji.textContent;
+                    field.focus();
+                }
+            });
         });
     });
 });
 </script>
+
 
     <!-- JavaScript to Toggle Reply Form -->
 <script>
