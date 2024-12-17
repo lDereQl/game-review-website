@@ -26,4 +26,5 @@ urlpatterns = [
     path('upload/', views.upload_file, name='upload_file'),
     path('comments/edit/<int:comment_id>/', views.edit_comment, name='edit_comment'),
     path('comments/<int:comment_id>/like/', views.like_comment, name='like_comment'),
+    path('game/<int:game_id>/import_steam_comments/', views.import_steam_comments, name='import_steam_comments'),
 ]

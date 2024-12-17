@@ -7,6 +7,10 @@ from django.http import HttpResponseForbidden,JsonResponse
 from .forms import CustomUserCreationForm, GameForm, CustomUserEditForm, CommentForm, ReviewForm, RoleChangeForm, FileUploadForm
 from .models import Game, Review, Comment, CustomUser, Like
 from .utils import get_game_info, upload_to_storage
+import requests
+from django.contrib.auth.models import User
+from django.db.utils import IntegrityError
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
 
 def home(request):
@@ -135,11 +139,13 @@ def verify_critic(request):
     return render(request, 'core/verify_critic.html')
 
 
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
 def game_detail(request, game_id):
     game = get_object_or_404(Game, id=game_id)
     steam_info = get_game_info(game.steam_app_id)
 
-    # Check if the game is a DLC or a base game
+    # Fetch base game or DLCs
     if game.parent_game:
         parent_game = game.parent_game
         dlcs = []
@@ -150,7 +156,7 @@ def game_detail(request, game_id):
     # Fetch the latest two reviews
     latest_reviews = game.reviews.order_by('-created_at')[:2]
 
-    # Check if the user is a critic and has reviewed
+    # User and critic check
     is_critic = request.user.is_authenticated and request.user.role == 'critic'
     user_has_reviewed = False
     user_review = None
@@ -161,23 +167,45 @@ def game_detail(request, game_id):
         except Review.DoesNotExist:
             pass
 
-    # Fetch top-level comments (comments without a parent)
-    comments = Comment.objects.filter(game=game, parent__isnull=True).select_related('user')
+    # Comments pagination (number of comments per page set by query parameter)
+    comments_per_page = request.GET.get('comments_per_page', 10)  # Default to 10
+    try:
+        comments_per_page = int(comments_per_page)
+    except ValueError:
+        comments_per_page = 10
 
+    top_level_comments = Comment.objects.filter(game=game, parent__isnull=True).select_related('user')
+    paginator = Paginator(top_level_comments, comments_per_page)
+
+    page = request.GET.get('page')
+    try:
+        comments = paginator.page(page)
+    except PageNotAnInteger:
+        comments = paginator.page(1)
+    except EmptyPage:
+        comments = paginator.page(paginator.num_pages)
+
+    # Paginate replies for each comment (limit to 5 replies per page)
+    paginated_replies = {}
+    for comment in comments:
+        replies = comment.replies.all()
+        reply_paginator = Paginator(replies, 5)
+        paginated_replies[comment.id] = reply_paginator.page(1)  # Show first page of replies by default
+
+    # Comment form
     comment_form = CommentForm()
 
-    # Handle comment submission
     if request.method == 'POST':
-        if request.user.is_authenticated:
-            comment_form = CommentForm(request.POST)
-            if comment_form.is_valid():
-                new_comment = comment_form.save(commit=False)
-                new_comment.user = request.user
-                new_comment.game = game
-                new_comment.save()
-                return redirect('game_detail', game_id=game.id)
-        else:
-            return redirect('login')
+        comment_form = CommentForm(request.POST)
+        if comment_form.is_valid():
+            new_comment = comment_form.save(commit=False)
+            new_comment.user = request.user
+            new_comment.game = game
+            parent_id = request.POST.get('parent_id')
+            if parent_id:
+                new_comment.parent = get_object_or_404(Comment, id=parent_id)
+            new_comment.save()
+            return redirect('game_detail', game_id=game.id)
 
     context = {
         'game': game,
@@ -186,11 +214,15 @@ def game_detail(request, game_id):
         'is_critic': is_critic,
         'user_has_reviewed': user_has_reviewed,
         'user_review': user_review,
-        'comments': comments,  # Pass top-level comments
+        'comments': comments,  # Paginated top-level comments
         'comment_form': comment_form,
-        'error_message': 'Steam information not available' if not steam_info else None,
+        'paginated_replies': paginated_replies,  # First page of replies for each comment
+        'comments_per_page': comments_per_page,
     }
     return render(request, 'core/game.html', context)
+
+
+
 
 
 @login_required
@@ -377,3 +409,56 @@ def like_comment(request, comment_id):
     like_count = comment.like_set.count()
 
     return JsonResponse({"liked": liked, "like_count": like_count})
+
+
+@login_required
+def import_steam_comments(request, game_id):
+    # Ensure only admin users can trigger this function
+    if not request.user.is_authenticated or request.user.role != 'admin':
+        return HttpResponseForbidden("You do not have permission to import Steam comments.")
+
+    # Fetch the game and check for steam_app_id
+    game = get_object_or_404(Game, id=game_id)
+    if not game.steam_app_id:
+        messages.error(request, "This game does not have a Steam App ID.")
+        return redirect('game_detail', game_id=game.id)
+
+    # Ensure steam_user exists or create it
+    steam_user, created = CustomUser.objects.get_or_create(
+        username="steam_user",
+        defaults={"password": "importpassword", "email": "steam@example.com", "role": "user"}
+    )
+
+    # Delete old Steam comments (optional cleanup)
+    Comment.objects.filter(game=game, user=steam_user).delete()
+
+    # Fetch new Steam comments
+    url = f"https://store.steampowered.com/appreviews/{game.steam_app_id}?json=1&filter=recent&language=english"
+
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        reviews = data.get("reviews", [])
+        imported_count = 0
+
+        for review in reviews:
+            content = review.get("review", "")
+            if content:
+                Comment.objects.create(
+                    comment=content,
+                    user=steam_user,
+                    game=game
+                )
+                imported_count += 1
+
+        if imported_count > 0:
+            messages.success(request, f"Successfully imported {imported_count} comments from Steam.")
+        else:
+            messages.info(request, "No new comments were found to import from Steam.")
+
+    except requests.RequestException as e:
+        messages.error(request, f"Failed to fetch Steam comments: {str(e)}")
+
+    return redirect('game_detail', game_id=game.id)
