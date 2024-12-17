@@ -1,0 +1,55 @@
+{% extends "core/base.html" %}
+
+{% block title %}Edit Comment{% endblock %}
+
+{% block content %}
+<h1>Edit Comment</h1>
+
+<!-- Edit Comment Form -->
+{% if user.is_authenticated %}
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+
+        <!-- Emoji Picker Integration -->
+        <div class="emoji-picker">
+            <span class="emoji">😀</span>
+            <span class="emoji">😂</span>
+            <span class="emoji">😍</span>
+            <span class="emoji">😢</span>
+            <span class="emoji">😡</span>
+            <span class="emoji">👍</span>
+            <span class="emoji">❤️</span>
+            <span class="emoji">🤡</span>
+            <span class="emoji">👺</span>
+            <span class="emoji">💩</span>
+            <span class="emoji">🙈</span>
+            <span class="emoji">🙉</span>
+            <!-- Add more emojis as needed -->
+        </div>
+
+        <!-- Submit Button -->
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+        <a href="{% url 'game_detail' comment.game.id %}" class="btn btn-secondary">Cancel</a>
+    </form>
+{% else %}
+    <p>You need to <a href="{% url 'login' %}">log in</a> to edit this comment.</p>
+{% endif %}
+
+<!-- Emoji Picker Script -->
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // Get all emoji elements and the comment input field
+    const emojis = document.querySelectorAll(".emoji");
+    const commentField = document.querySelector("#id_comment");  // Adjust selector if needed
+
+    emojis.forEach(emoji => {
+        emoji.addEventListener("click", function() {
+            // Append the emoji to the comment field
+            commentField.value += emoji.textContent;
+            commentField.focus();  // Bring focus back to the input field
+        });
+    });
+});
+</script>
+{% endblock %}

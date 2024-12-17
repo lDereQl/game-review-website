@@ -3,9 +3,9 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib import messages
-from django.http import HttpResponseForbidden
+from django.http import HttpResponseForbidden,JsonResponse
 from .forms import CustomUserCreationForm, GameForm, CustomUserEditForm, CommentForm, ReviewForm, RoleChangeForm, FileUploadForm
-from .models import Game, Review, Comment, CustomUser
+from .models import Game, Review, Comment, CustomUser, Like
 from .utils import get_game_info, upload_to_storage
 
 
@@ -340,3 +340,40 @@ def upload_file(request):
         form = FileUploadForm()
 
     return render(request, 'upload_file.html', {'form': form})
+
+
+@login_required
+def edit_comment(request, comment_id):
+    # Fetch the comment ensuring the current user owns it
+    comment = get_object_or_404(Comment, id=comment_id, user=request.user)
+
+    if request.method == 'POST':
+        form = CommentForm(request.POST, instance=comment)
+        if form.is_valid():
+            # Mark the comment as edited
+            comment.edited = True
+            form.save()
+            return redirect('game_detail', game_id=comment.game.id)
+    else:
+        form = CommentForm(instance=comment)
+
+    return render(request, 'core/edit_comment.html', {'form': form, 'comment': comment})
+
+
+def like_comment(request, comment_id):
+    comment = get_object_or_404(Comment, id=comment_id)
+    user = request.user
+
+    # Check if the user already liked the comment
+    like, created = Like.objects.get_or_create(user=user, comment=comment)
+    if not created:
+        # If the like already exists, unlike it
+        like.delete()
+        liked = False
+    else:
+        liked = True
+
+    # Return the updated like count
+    like_count = comment.like_set.count()
+
+    return JsonResponse({"liked": liked, "like_count": like_count})

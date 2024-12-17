@@ -83,6 +83,18 @@
                     </form>
                 {% endif %}
 
+                {% if user.is_authenticated and user == comment.user %}
+                    <a href="{% url 'edit_comment' comment.id %}" class="btn btn-sm btn-warning">Edit</a>
+                {% endif %}
+            <!-- Like Button -->
+            <form class="like-form" data-comment-id="{{ comment.id }}">
+                <button type="button" class="btn btn-sm btn-outline-primary like-btn">
+                    👍 Like (<span id="like-count-{{ comment.id }}">{{ comment.like_set.count }}</span>)
+                </button>
+            </form>
+
+
+
                 <!-- Display replies -->
                 {% with comment.replies.all as replies %}
                     {% if replies %}
@@ -142,6 +154,40 @@ document.addEventListener("DOMContentLoaded", function() {
             // Append the emoji to the comment field
             commentField.value += emoji.textContent;
             commentField.focus();  // Bring focus back to the input field
+        });
+    });
+});
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const likeForms = document.querySelectorAll(".like-form");
+
+    likeForms.forEach(form => {
+        const button = form.querySelector(".like-btn");
+
+        form.addEventListener("click", function () {
+            const commentId = form.dataset.commentId;
+            const likeCountSpan = document.getElementById(`like-count-${commentId}`);
+
+            fetch(`/comments/${commentId}/like/`, {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": "{{ csrf_token }}",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.liked) {
+                    button.classList.add("btn-primary");
+                    button.classList.remove("btn-outline-primary");
+                } else {
+                    button.classList.remove("btn-primary");
+                    button.classList.add("btn-outline-primary");
+                }
+                likeCountSpan.textContent = data.like_count;
+            })
+            .catch(error => console.error("Error:", error));
         });
     });
 });

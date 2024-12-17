@@ -24,4 +24,6 @@ urlpatterns = [
     path('adminas/user_list/', views.user_list, name='user_list'),
     path('adminas/update_role/<int:user_id>/', views.update_user_role, name='update_user_role'),
     path('upload/', views.upload_file, name='upload_file'),
+    path('comments/edit/<int:comment_id>/', views.edit_comment, name='edit_comment'),
+    path('comments/<int:comment_id>/like/', views.like_comment, name='like_comment'),
 ]
