@@ -1,14 +1,33 @@
-<!-- core/templates/core/verify_critic.html -->
 <h1>Verify Identity</h1>
-<p>Please enter your password to verify your identity.</p>
+<p>Please verify your identity by entering your password and uploading your work ID.</p>
 
-<form action="{% url 'verify_critic' %}" method="POST">
+<form action="{% url 'verify_critic' %}" method="POST" enctype="multipart/form-data">
     {% csrf_token %}
     <label for="password">Password:</label>
     <input type="password" name="password" id="password" required>
+
+    <label for="file">Upload Work ID:</label>
+    <input type="file" name="file" id="file" required>
+
     <button type="submit">Verify</button>
 </form>
 
-{% if error %}
-    <p style="color: red;">{{ error }}</p>
+<!-- Display messages such as success or failure -->
+{% if messages %}
+    <ul>
+        {% for message in messages %}
+            <li style="color: red;">{{ message }}</li>
+        {% endfor %}
+    </ul>
 {% endif %}
+
+<!-- Debugging: Show the extracted text from OCR -->
+{% if extracted_text %}
+    <h3>Extracted Text from OCR:</h3>
+    <pre style="border: 1px solid #ddd; background-color: #f9f9f9; padding: 10px;">{{ extracted_text }}</pre>
+{% endif %}
+
+<!-- Add the "Back to Account Details" button -->
+<a href="{% url 'account_details' user_id=request.user.id %}">
+    <button type="button">Back to Account Details</button>
+</a>

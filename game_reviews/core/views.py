@@ -6,7 +6,8 @@ from django.contrib import messages
 from django.http import HttpResponseForbidden
 from .forms import CustomUserCreationForm, GameForm, CustomUserEditForm, CommentForm, ReviewForm, RoleChangeForm, FileUploadForm
 from .models import Game, Review, Comment, CustomUser
-from .utils import get_game_info, upload_to_storage
+from .utils import get_game_info, upload_to_storage, verify_id_image  # Import verify_id_image
+from .utils import verify_id_image, upload_image_to_storage  # Import the new function
 
 
 def home(request):
@@ -130,9 +131,49 @@ def delete_critic_confirm(request):
 
 @login_required
 def verify_critic(request):
+    """
+    Verifies the critic's identity using a password and uploaded work ID.
+    """
     if request.user.role != 'critic':
         return HttpResponseForbidden("You are not authorized to verify this profile.")
-    return render(request, 'core/verify_critic.html')
+
+    extracted_text = ""  # Initialize variable to hold extracted text
+
+    if request.method == 'POST':
+        try:
+            # Step 1: Verify the password
+            password = request.POST.get('password')
+            user = authenticate(username=request.user.username, password=password)
+
+            if user is None:
+                messages.error(request, "Incorrect password. Please try again.")
+                return render(request, 'core/verify_critic.html', {'extracted_text': extracted_text})
+
+            # Step 2: Handle the file upload
+            uploaded_file = request.FILES.get('file')
+            if not uploaded_file:
+                messages.error(request, "Please upload an image of your work ID.")
+                return render(request, 'core/verify_critic.html', {'extracted_text': extracted_text})
+
+            # Save the uploaded file using the new function
+            file_path = upload_image_to_storage(uploaded_file)
+            print(f"File saved at: {file_path}")
+
+            # Step 3: Run OCR-based verification
+            result = verify_id_image(file_path)
+            extracted_text = result['text']  # Capture extracted text for debugging
+            print(f"Verification Result: {result}")
+
+            # Step 4: Provide feedback
+            if result['verified'] and result['confidence'] >= 0.8:
+                messages.success(request, f"Verification successful! Confidence: {result['confidence']:.2f}")
+            else:
+                messages.error(request, f"Verification failed. Confidence: {result['confidence']:.2f}")
+        except Exception as e:
+            print(f"Error in verify_critic view: {e}")
+            messages.error(request, "An unexpected error occurred. Please try again.")
+
+    return render(request, 'core/verify_critic.html', {'extracted_text': extracted_text})
 
 
 def game_detail(request, game_id):
@@ -296,6 +337,10 @@ def user_list(request):
     }
 
     return render(request, 'core/user_list.html', context)
+
+
+
+
 
 
 @login_required
