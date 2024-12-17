@@ -1,0 +1,8 @@
+Django==5.0.4
+python-decouple
+google-cloud-storage
+python-dotenv
+psycopg2-binary
+django-storages
+Pillow
+pytesseract
