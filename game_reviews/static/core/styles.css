@@ -178,3 +178,18 @@ button[type="submit"]:hover, .btn-primary:hover {
         margin: 5px 0;
     }
 }
+
+.like-btn {
+    max-width: 120px; /* Adjust to desired maximum width */
+    padding: 5px 10px; /* Compact padding for smaller size */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+}
+.like-form {
+    display: inline-block; /* Prevents the form from stretching */
+    margin: 0; /* Ensures no extra spacing */
+    padding: 0; /* Removes unnecessary padding */
+    width: auto;
+}

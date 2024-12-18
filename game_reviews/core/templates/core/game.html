@@ -108,9 +108,10 @@
 
                 <!-- Like Button for Comments -->
                 <form class="like-form" data-comment-id="{{ comment.id }}">
-                    <button type="button" class="btn btn-sm btn-outline-primary like-btn">
+                    <button type="button" class="btn btn-sm btn-outline-primary like-btn" >
                         👍 Like (<span id="like-count-{{ comment.id }}">{{ comment.like_set.count }}</span>)
                     </button>
+
                 </form>
 
                 <!-- Reply Button -->
