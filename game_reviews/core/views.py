@@ -121,7 +121,7 @@ def edit_critic(request):
         form = CustomUserEditForm(request.POST, request.FILES, instance=request.user)
         if form.is_valid():
             form.save()
-            return redirect('account_details')
+            return redirect('account_details', user_id=request.user.id)
     else:
         form = CustomUserEditForm(instance=request.user)
 

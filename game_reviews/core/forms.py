@@ -19,7 +19,7 @@ class CustomUserCreationForm(UserCreationForm):
 class CustomUserEditForm(forms.ModelForm):
     class Meta:
         model = CustomUser
-        fields = ['username', 'email', 'image', 'description', 'publication', 'role']
+        fields = ['username', 'email', 'image', 'description', 'publication']
         widgets = {
             'description': forms.Textarea(attrs={'rows': 3}),
             'image': forms.URLInput(attrs={'placeholder': 'Profile Image URL'}),

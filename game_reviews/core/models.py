@@ -58,8 +58,8 @@ class Game(models.Model):
     parent_game = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name="dlcs")
     genre = models.TextField(max_length=255, default='empty')
     hidden = models.BooleanField(default=False)
-
     average_rating = models.FloatField(default=0.0)
+
     def __str__(self):
         return self.title
 
