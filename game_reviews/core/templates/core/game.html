@@ -38,10 +38,11 @@
             <!-- Edit Game -->
             <a href="{% url 'edit_game' game.id %}" class="btn btn-primary">Edit Game</a>
 
-            <!-- Hide Game -->
-            <form action="{% url 'hide_game' game.id %}" method="post" style="display:inline;">
+            <form action="{% url 'toggle_game_visibility' game.id %}" method="post" style="display:inline;">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-warning">Hide Game</button>
+                <button type="submit" class="btn btn-warning">
+                    {% if game.hidden %}Show Game{% else %}Hide Game{% endif %}
+                </button>
             </form>
         {% endif %}
 

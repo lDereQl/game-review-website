@@ -331,7 +331,11 @@ def delete_game(request, game_id):
 
 
 def game_list(request):
-    games = Game.objects.all()  # Fetch all games from the database
+    if request.user.is_authenticated and request.user.role in ['moderator', 'admin']:
+        games = Game.objects.all()  # Moderators and admins see all games
+    else:
+        games = Game.objects.filter(hidden=False)  # Regular users see only visible games
+
     return render(request, 'core/game_list.html', {'games': games})
 
 
