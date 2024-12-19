@@ -85,20 +85,51 @@
     {% for review in latest_reviews %}
         <div class="review">
             <h3>{{ review.user.username }}</h3>
+            <p><strong>Title:</strong> {{ review.title }}</p>
             <p><strong>Rating:</strong> {{ review.rating }} / 5</p>
             <p>{{ review.comment }}</p>
             <p><em>Reviewed on: {{ review.created_at|date:"F j, Y" }}</em></p>
+
+            <!-- Voting Section -->
+            <div class="vote-section">
+                <form action="{% url 'vote_review' review.id 'up' %}" method="post" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-success">👍</button>
+                </form>
+                <form action="{% url 'vote_review' review.id 'down' %}" method="post" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger">👎</button>
+                </form>
+                <span>Helpful Votes: {{ review.helpful_votes }}</span>
+            </div>
+
+            <!-- Edit Button for Critics -->
+            {% if user.is_authenticated and user.role == 'critic' and review.user == user %}
+                <a href="{% url 'edit_review' review.id %}" class="btn btn-sm btn-warning">Edit</a>
+            {% endif %}
+
+            <!-- Delete Button for Moderators -->
+            {% if user.is_authenticated and user.role == 'moderator' %}
+                <form action="{% url 'delete_review' review.id %}" method="post" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                </form>
+            {% endif %}
         </div>
+        <hr>
     {% empty %}
-        <p>No reviews yet.</p>
+        <p>No reviews yet. Be the first to review this game!</p>
     {% endfor %}
 
-    <a href="{% url 'all_reviews' game.id %}" class="btn">View All Reviews</a>
+    <!-- View All Reviews Button -->
+    <a href="{% url 'all_reviews' game.id %}" class="btn btn-primary">View All Reviews</a>
 
-    {% if is_critic %}
-        <a href="{% url 'create_review' game.id %}" class="btn btn-primary">Create Review</a>
+    <!-- Create Review Button for Critics -->
+    {% if is_critic and not user_has_reviewed %}
+        <a href="{% url 'create_review' game.id %}" class="btn btn-success">Write a Review</a>
     {% endif %}
 </div>
+
 
 
 

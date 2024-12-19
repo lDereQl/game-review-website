@@ -23,6 +23,7 @@ class CustomUser(AbstractUser):
     role = models.CharField(max_length=255, choices=ROLE_CHOICES, default='user')
     first_name = models.CharField(max_length=30, blank=True, null=True)  # Make it optional
     last_name = models.CharField(max_length=30, blank=True, null=True)  # Make it optional
+    banned = models.BooleanField(default=False)  # Add banned field
 
 
     # Set the field used for authentication
@@ -100,6 +101,10 @@ class Review(models.Model):
     game = models.ForeignKey(Game, on_delete=models.CASCADE, related_name='reviews')
     rating = models.IntegerField(choices=[(i, i) for i in range(1, 6)])
     created_at = models.DateTimeField(auto_now_add=True)
+    voters = models.ManyToManyField(CustomUser, related_name="voted_reviews", blank=True)
+
+    def has_voted(self, user):
+        return self.voters.filter(id=user.id).exists()
 
     def __str__(self):
         return self.title

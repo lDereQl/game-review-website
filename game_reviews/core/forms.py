@@ -144,6 +144,18 @@ class ReviewForm(forms.ModelForm):
             'title': forms.TextInput(attrs={'placeholder': 'Review Title'}),
         }
 
+    def clean_comment(self):
+        comment = self.cleaned_data.get('comment')
+        if not comment or len(comment) < 10:
+            raise forms.ValidationError("The comment must be at least 10 characters long.")
+        return comment
+
+    def clean_title(self):
+        title = self.cleaned_data.get('title')
+        if not title:
+            raise forms.ValidationError("The title cannot be empty.")
+        return title
+
 
 class RoleChangeForm(forms.ModelForm):
     class Meta:

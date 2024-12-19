@@ -3,15 +3,16 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib import messages
-from django.http import HttpResponseForbidden,JsonResponse
-from .forms import CustomUserCreationForm, GameForm, CustomUserEditForm, CommentForm, ReviewForm, RoleChangeForm, FileUploadForm
+from django.http import HttpResponseForbidden, JsonResponse
+from .forms import CustomUserCreationForm, GameForm, CustomUserEditForm, CommentForm, ReviewForm, RoleChangeForm, \
+    FileUploadForm
 from .models import Game, Review, Comment, CustomUser, Like
 from .utils import get_game_info, upload_to_storage
 import requests
 from django.contrib.auth.models import User
 from django.db.utils import IntegrityError
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger 
-from .utils import  upload_image_to_storage, verify_id_image
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from .utils import upload_image_to_storage, verify_id_image
 
 
 def home(request):
@@ -191,15 +192,13 @@ def game_detail(request, game_id):
     game = get_object_or_404(Game, id=game_id)
     steam_info = get_game_info(game.steam_app_id)
 
-    # Determine if the game is a DLC or a parent game
+    # Fetch base game or DLCs
     if game.parent_game:
-        # If the game is a DLC, fetch its parent game
         parent_game = game.parent_game
-        dlcs = []  # DLCs won't exist for a DLC
+        dlcs = []
     else:
-        # If the game is a parent game, fetch its DLCs
         parent_game = None
-        dlcs = game.dlcs.all()  # Fetch all child games marked as DLCs
+        dlcs = Game.objects.filter(parent_game=game)
 
     # Fetch the latest two reviews
     latest_reviews = game.reviews.order_by('-created_at')[:2]
@@ -258,8 +257,6 @@ def game_detail(request, game_id):
     context = {
         'game': game,
         'steam_info': steam_info,
-        'parent_game': parent_game,  # Parent game for DLCs
-        'dlcs': dlcs,  # DLCs for parent games
         'latest_reviews': latest_reviews,
         'is_critic': is_critic,
         'user_has_reviewed': user_has_reviewed,
@@ -270,7 +267,6 @@ def game_detail(request, game_id):
         'comments_per_page': comments_per_page,
     }
     return render(request, 'core/game.html', context)
-
 
 
 
@@ -294,54 +290,37 @@ def create_game(request):
 
 @login_required
 def edit_game(request, game_id):
-    # Verify user has 'moderator' role
-    if request.user.role != 'moderator':
+    if not (request.user.role == 'admin' or request.user.role == 'moderator'):
         return HttpResponseForbidden("You are not authorized to edit games.")
 
-    # Fetch the game object
     game = get_object_or_404(Game, id=game_id)
-
-    # Check if the form is submitted
     if request.method == 'POST':
-        form = GameForm(request.POST, request.FILES, instance=game)
+        form = GameForm(request.POST, instance=game)
         if form.is_valid():
-            try:
-                form.save()  # Save changes to the game object
-                messages.success(request, f"The game '{game.title}' has been updated.")
-                return redirect('game_detail', game_id=game.id)  # Redirect to game detail
-            except Exception as e:
-                messages.error(request, f"Error saving game: {e}")
-        else:
-            # Log errors for debugging
-            for field, errors in form.errors.items():
-                print(f"Error in field {field}: {errors}")
-            messages.error(request, "Please correct the errors below.")
+            form.save()
+            return redirect('game_detail', game_id=game.id)
     else:
         form = GameForm(instance=game)
 
-    # Render the edit_game template with the form
     return render(request, 'core/edit_game.html', {'form': form, 'game': game})
-
 
 
 @login_required
 def delete_game(request, game_id):
     if request.user.role != 'admin':
         return HttpResponseForbidden("You are not authorized to delete games.")
+
     game = get_object_or_404(Game, id=game_id)
+
     if request.method == 'POST':
         game.delete()
-        messages.success(request, f"The game '{game.title}' has been deleted.")
-        return redirect('game_list')
+        return redirect('home')  # Redirect to home after deletion
+
     return render(request, 'core/delete_game_confirm.html', {'game': game})
 
 
-
 def game_list(request):
-    if request.user.is_authenticated and request.user.role in ['moderator', 'admin']:
-        games = Game.objects.all()  # Moderators and admins see all games
-    else:
-        games = Game.objects.filter(hidden=False)  # Regular users see only visible games
+    games = Game.objects.all()  # Fetch all games from the database
     return render(request, 'core/game_list.html', {'games': games})
 
 
@@ -557,3 +536,73 @@ def toggle_game_visibility(request, game_id):
         messages.success(request, f"The game '{game.title}' is now visible.")
 
     return redirect('game_list')
+
+
+@login_required
+def vote_review(request, review_id, vote_type):
+    review = get_object_or_404(Review, id=review_id)
+
+    if review.has_voted(request.user):
+        return HttpResponseForbidden("You have already voted on this review.")
+
+    if vote_type == "up":
+        review.helpful_votes += 1
+    elif vote_type == "down":
+        review.helpful_votes -= 1
+
+    review.voters.add(request.user)
+    review.save()
+
+    return redirect("game_detail", game_id=review.game.id)
+
+@login_required
+def edit_review(request, review_id):
+    review = get_object_or_404(Review, id=review_id)
+
+    # Ensure the user is authorized to edit this review
+    if request.user.role != 'critic' or review.user != request.user:
+        return HttpResponseForbidden("You are not allowed to edit this review.")
+
+    if request.method == "POST":
+        form = ReviewForm(request.POST, instance=review)
+        if form.is_valid():
+            form.save()
+            return redirect('game_detail', game_id=review.game.id)
+    else:
+        form = ReviewForm(instance=review)
+
+    return render(request, 'core/edit_review.html', {'form': form, 'review': review})
+
+
+@login_required
+def delete_review(request, review_id):
+    review = get_object_or_404(Review, id=review_id)
+
+    # Ensure only moderators can delete reviews
+    if request.user.role != 'moderator':
+        return HttpResponseForbidden("You are not authorized to delete this review.")
+
+    if request.method == "POST":
+        review.delete()
+        return redirect('game_detail', game_id=review.game.id)
+
+    return render(request, 'core/delete_review_confirm.html', {'review': review})
+
+
+
+@login_required
+def ban_user(request, user_id):
+    if request.user.role != 'admin':
+        return HttpResponseForbidden("You are not authorized to ban users.")
+
+    user = get_object_or_404(CustomUser, id=user_id)
+
+    # Prevent banning other admins
+    if user.role == 'admin':
+        messages.error(request, "You cannot ban an admin.")
+        return redirect('user_list')
+
+    user.banned = True
+    user.save()
+    messages.success(request, f"{user.username} has been banned successfully.")
+    return redirect('user_list')
