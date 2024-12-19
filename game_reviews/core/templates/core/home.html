@@ -16,14 +16,25 @@
             </a>
             <p><strong>Genre:</strong> {{ game.genre }}</p>
             <p><strong>Developer:</strong> {{ game.developer }}</p>
-            <p><strong>Average Rating:</strong> {{ game.average_rating }} / 5</p>
+            <p><strong>Average Rating:</strong> {{ game.average_rating|floatformat:2 }} / 5</p>
         </li>
     {% endfor %}
 </ul>
+
+<!-- Pagination Controls -->
+<div class="pagination">
+    {% if latest_games.has_previous %}
+        <a href="?page={{ latest_games.previous_page_number }}" class="btn">Previous</a>
+    {% endif %}
+    <span>Page {{ latest_games.number }} of {{ latest_games.paginator.num_pages }}</span>
+    {% if latest_games.has_next %}
+        <a href="?page={{ latest_games.next_page_number }}" class="btn">Next</a>
+    {% endif %}
+</div>
 
 {% if user.is_authenticated and user.role == 'admin' %}
     <a href="{% url 'create_game' %}" class="btn-create">Create New Game</a>
 {% endif %}
 
-<p><a href="{% url 'game_list' %}">View All Games</a></p>  <!-- Link to full game list -->
+<p><a href="{% url 'game_list' %}">View All Games</a></p>
 {% endblock %}

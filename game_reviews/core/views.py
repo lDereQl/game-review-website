@@ -1,3 +1,4 @@
+from django.db.models import Q
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, authenticate, logout
@@ -15,14 +16,19 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from .utils import upload_image_to_storage, verify_id_image
 
 
+from django.core.paginator import Paginator
+
 def home(request):
-    if request.user.is_authenticated and request.user.role in ['moderator', 'admin']:
-        # Moderators and admins see all games
-        latest_games = Game.objects.order_by('-id')[:10]
-    else:
-        # Regular users only see non-hidden games
-        latest_games = Game.objects.filter(hidden=False).order_by('-id')[:10]
-    return render(request, 'core/home.html', {'latest_games': latest_games})
+    latest_games = Game.objects.filter(hidden=False).order_by('-release_date')  # Fetch latest games
+    paginator = Paginator(latest_games, 5)  # Show 5 games per page
+    page_number = request.GET.get('page')
+    games_page = paginator.get_page(page_number)
+
+    context = {
+        'latest_games': games_page,
+    }
+    return render(request, 'core/home.html', context)
+
 
 
 def register(request):
@@ -320,8 +326,36 @@ def delete_game(request, game_id):
 
 
 def game_list(request):
-    games = Game.objects.all()  # Fetch all games from the database
-    return render(request, 'core/game_list.html', {'games': games})
+    query = request.GET.get('q', '')  # Search query
+    sort = request.GET.get('sort', 'title')  # Sorting field, default is 'title'
+    order = request.GET.get('order', 'asc')  # Sorting order, default is ascending
+
+    # Search games by title, genre, platform, category, or tag
+    games = Game.objects.filter(
+        Q(title__icontains=query) |
+        Q(genre__icontains=query) |
+        Q(platform__platform_name__icontains=query) |
+        Q(category__category_name__icontains=query) |
+        Q(tags__tag_name__icontains=query)
+    ).distinct()
+
+    # Sorting logic
+    if order == 'desc':
+        sort = f"-{sort}"
+    games = games.order_by(sort)
+
+    # Pagination
+    paginator = Paginator(games, 10)  # 10 games per page
+    page = request.GET.get('page')
+    games_page = paginator.get_page(page)
+
+    context = {
+        'games': games_page,
+        'query': query,
+        'sort': sort.strip('-'),
+        'order': order,
+    }
+    return render(request, 'core/game_list.html', context)
 
 
 @login_required

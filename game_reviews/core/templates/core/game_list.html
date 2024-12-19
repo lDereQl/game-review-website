@@ -5,21 +5,42 @@
 {% block content %}
 <h1>All Games</h1>
 
+<!-- Search Form -->
+<form method="get" class="search-form">
+    <input type="text" name="q" value="{{ query }}" placeholder="Search by name, genre, platform, or tag">
+    <button type="submit" class="btn-primary">Search</button>
+</form>
+
+<!-- Sorting Links -->
+<div class="sorting">
+    <a href="?q={{ query }}&sort=title&order=asc" class="btn {% if sort == 'title' and order == 'asc' %}btn-primary{% endif %}">Title A-Z</a>
+    <a href="?q={{ query }}&sort=title&order=desc" class="btn {% if sort == 'title' and order == 'desc' %}btn-primary{% endif %}">Title Z-A</a>
+    <a href="?q={{ query }}&sort=average_rating&order=desc" class="btn {% if sort == 'average_rating' and order == 'desc' %}btn-primary{% endif %}">Top Rated</a>
+    <a href="?q={{ query }}&sort=average_rating&order=asc" class="btn {% if sort == 'average_rating' and order == 'asc' %}btn-primary{% endif %}">Lowest Rated</a>
+</div>
+
+<!-- Game List -->
 <ul class="game-list">
     {% for game in games %}
         <li>
-    <a href="{% url 'game_detail' game.id %}">
-        <h2>{% if game.hidden %}[HIDDEN] {% endif %}{{ game.title }}{% if game.parent_game %}[DLC]{% endif %}</h2>
-    </a>
-    <p><strong>Genre:</strong> {{ game.genre }}</p>
-    <p><strong>Developer:</strong> {{ game.developer }}</p>
-    <p><strong>Average Rating:</strong> {{ game.average_rating }} / 5</p>
+            <a href="{% url 'game_detail' game.id %}">
+                <h2>{% if game.hidden %}[HIDDEN] {% endif %}{{ game.title }}{% if game.parent_game %} [DLC]{% endif %}</h2>
+            </a>
+            <p><strong>Genre:</strong> {{ game.genre }}</p>
+            <p><strong>Developer:</strong> {{ game.developer }}</p>
+            <p><strong>Average Rating:</strong> {{ game.average_rating|floatformat:2 }} / 5</p>
         </li>
     {% endfor %}
 </ul>
 
-
-{% if user.is_authenticated and user.role == 'admin' %}
-    <a href="{% url 'create_game' %}" class="btn-create">Create New Game</a>
-{% endif %}
+<!-- Pagination -->
+<div class="pagination">
+    {% if games.has_previous %}
+        <a href="?q={{ query }}&sort={{ sort }}&order={{ order }}&page={{ games.previous_page_number }}">Previous</a>
+    {% endif %}
+    <span>Page {{ games.number }} of {{ games.paginator.num_pages }}</span>
+    {% if games.has_next %}
+        <a href="?q={{ query }}&sort={{ sort }}&order={{ order }}&page={{ games.next_page_number }}">Next</a>
+    {% endif %}
+</div>
 {% endblock %}
