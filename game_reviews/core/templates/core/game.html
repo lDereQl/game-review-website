@@ -55,6 +55,32 @@
     </div>
 </div>
 
+<h2>Tags</h2>
+<ul>
+    {% for tag in tags %}
+        <li>{{ tag.tag_name }}</li>
+    {% empty %}
+        <li>No tags available.</li>
+    {% endfor %}
+</ul>
+
+<h2>Categories</h2>
+<ul>
+    {% for category in categories %}
+        <li>{{ category.category_name }}</li>
+    {% empty %}
+        <li>No categories available.</li>
+    {% endfor %}
+</ul>
+
+    <h2>Platforms</h2>
+<ul>
+    {% for platform in platforms %}
+        <li>{{ platform.platform_name }}</li>
+    {% empty %}
+        <li>No platforms available.</li>
+    {% endfor %}
+</ul>
 
 <h2>SteamDB Information</h2>
 {% if steam_info %}

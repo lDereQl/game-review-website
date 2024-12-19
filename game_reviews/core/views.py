@@ -203,6 +203,10 @@ def game_detail(request, game_id):
     # Fetch the latest two reviews
     latest_reviews = game.reviews.order_by('-created_at')[:2]
 
+    tags = game.tags.all()
+    categories = game.category.all()
+    platforms = game.platform.all()
+
     # User and critic check
     is_critic = request.user.is_authenticated and request.user.role == 'critic'
     user_has_reviewed = False
@@ -265,6 +269,9 @@ def game_detail(request, game_id):
         'comment_form': comment_form,
         'paginated_replies': paginated_replies,  # First page of replies for each comment
         'comments_per_page': comments_per_page,
+        'tags': tags,
+        'categories': categories,
+        'platforms': platforms,
     }
     return render(request, 'core/game.html', context)
 
@@ -278,9 +285,11 @@ def create_game(request):
         return HttpResponseForbidden("You are not authorized to create games.")
 
     if request.method == 'POST':
-        form = GameForm(request.POST, request.FILES)  # Include request.FILES
+        form = GameForm(request.POST, request.FILES)
         if form.is_valid():
-            game = form.save()  # Automatically handles uploaded files
+            game = form.save(commit=False)
+            game.save()  # Save the game instance first
+            form.save_m2m()  # Save many-to-many relationships
             return redirect('home')
     else:
         form = GameForm()
@@ -297,7 +306,9 @@ def edit_game(request, game_id):
     if request.method == 'POST':
         form = GameForm(request.POST, instance=game)
         if form.is_valid():
-            form.save()
+            game = form.save(commit=False)
+            game.save()
+            form.save_m2m()  # Save many-to-many relationships
             return redirect('game_detail', game_id=game.id)
     else:
         form = GameForm(instance=game)
