@@ -15,7 +15,12 @@ from .utils import  upload_image_to_storage, verify_id_image
 
 
 def home(request):
-    latest_games = Game.objects.order_by('-id')[:10]  # Fetch the latest 10 games
+    if request.user.is_authenticated and request.user.role in ['moderator', 'admin']:
+        # Moderators and admins see all games
+        latest_games = Game.objects.order_by('-id')[:10]
+    else:
+        # Regular users only see non-hidden games
+        latest_games = Game.objects.filter(hidden=False).order_by('-id')[:10]
     return render(request, 'core/home.html', {'latest_games': latest_games})
 
 
@@ -186,13 +191,15 @@ def game_detail(request, game_id):
     game = get_object_or_404(Game, id=game_id)
     steam_info = get_game_info(game.steam_app_id)
 
-    # Fetch base game or DLCs
+    # Determine if the game is a DLC or a parent game
     if game.parent_game:
+        # If the game is a DLC, fetch its parent game
         parent_game = game.parent_game
-        dlcs = []
+        dlcs = []  # DLCs won't exist for a DLC
     else:
+        # If the game is a parent game, fetch its DLCs
         parent_game = None
-        dlcs = Game.objects.filter(parent_game=game)
+        dlcs = game.dlcs.all()  # Fetch all child games marked as DLCs
 
     # Fetch the latest two reviews
     latest_reviews = game.reviews.order_by('-created_at')[:2]
@@ -251,6 +258,8 @@ def game_detail(request, game_id):
     context = {
         'game': game,
         'steam_info': steam_info,
+        'parent_game': parent_game,  # Parent game for DLCs
+        'dlcs': dlcs,  # DLCs for parent games
         'latest_reviews': latest_reviews,
         'is_critic': is_critic,
         'user_has_reviewed': user_has_reviewed,
@@ -261,6 +270,7 @@ def game_detail(request, game_id):
         'comments_per_page': comments_per_page,
     }
     return render(request, 'core/game.html', context)
+
 
 
 
@@ -284,37 +294,54 @@ def create_game(request):
 
 @login_required
 def edit_game(request, game_id):
-    if not (request.user.role == 'admin' or request.user.role == 'moderator'):
+    # Verify user has 'moderator' role
+    if request.user.role != 'moderator':
         return HttpResponseForbidden("You are not authorized to edit games.")
 
+    # Fetch the game object
     game = get_object_or_404(Game, id=game_id)
+
+    # Check if the form is submitted
     if request.method == 'POST':
-        form = GameForm(request.POST, instance=game)
+        form = GameForm(request.POST, request.FILES, instance=game)
         if form.is_valid():
-            form.save()
-            return redirect('game_detail', game_id=game.id)
+            try:
+                form.save()  # Save changes to the game object
+                messages.success(request, f"The game '{game.title}' has been updated.")
+                return redirect('game_detail', game_id=game.id)  # Redirect to game detail
+            except Exception as e:
+                messages.error(request, f"Error saving game: {e}")
+        else:
+            # Log errors for debugging
+            for field, errors in form.errors.items():
+                print(f"Error in field {field}: {errors}")
+            messages.error(request, "Please correct the errors below.")
     else:
         form = GameForm(instance=game)
 
+    # Render the edit_game template with the form
     return render(request, 'core/edit_game.html', {'form': form, 'game': game})
+
 
 
 @login_required
 def delete_game(request, game_id):
     if request.user.role != 'admin':
         return HttpResponseForbidden("You are not authorized to delete games.")
-
     game = get_object_or_404(Game, id=game_id)
-
     if request.method == 'POST':
         game.delete()
-        return redirect('home')  # Redirect to home after deletion
-
+        messages.success(request, f"The game '{game.title}' has been deleted.")
+        return redirect('game_list')
     return render(request, 'core/delete_game_confirm.html', {'game': game})
 
 
+
 def game_list(request):
-    games = Game.objects.all()  # Fetch all games from the database
+    if request.user.is_authenticated and request.user.role in ['moderator', 'admin']:
+        games = Game.objects.all()  # Moderators and admins see all games
+    else:
+        games = Game.objects.filter(hidden=False)  # Regular users see only visible games
     return render(request, 'core/game_list.html', {'games': games})
 
 
@@ -503,3 +530,30 @@ def import_steam_comments(request, game_id):
         messages.error(request, f"Failed to fetch Steam comments: {str(e)}")
 
     return redirect('game_detail', game_id=game.id)
+
+@login_required
+def hide_game(request, game_id):
+    if request.user.role != 'moderator':
+        return HttpResponseForbidden("You are not authorized to hide games.")
+
+    game = get_object_or_404(Game, id=game_id)
+    game.hidden = True
+    game.save()
+    messages.success(request, f"The game '{game.title}' has been hidden.")
+    return redirect('game_list')
+
+@login_required
+def toggle_game_visibility(request, game_id):
+    if request.user.role not in ['moderator', 'admin']:
+        return HttpResponseForbidden("You are not authorized to perform this action.")
+
+    game = get_object_or_404(Game, id=game_id)
+    game.hidden = not game.hidden  # Toggle visibility
+    game.save()
+
+    if game.hidden:
+        messages.success(request, f"The game '{game.title}' has been hidden.")
+    else:
+        messages.success(request, f"The game '{game.title}' is now visible.")
+
+    return redirect('game_list')

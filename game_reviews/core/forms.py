@@ -37,73 +37,70 @@ class CustomAuthenticationForm(AuthenticationForm):
 
 class GameForm(forms.ModelForm):
 
-    def upload_file(self, file, content_type, blob_name):  # Added content_type parameter
+    def upload_file(self, file, content_type, blob_name):
         try:
-            credentials_path = os.environ.get('GOOGLE_CREDENTIALS_PATH')
-            if not credentials_path:
-                raise ValueError("GOOGLE_CREDENTIALS_PATH environment variable is not set")
-
-            try:
-                storage_client = storage.Client.from_service_account_json(credentials_path)
-            except Exception as e:
-                raise ValueError(f"Failed to initialize storage client: {str(e)}")
-
-            bucket_name = os.environ.get('GS_BUCKET_NAME')
-            if not bucket_name:
-                raise ValueError("GS_BUCKET_NAME environment variable is not set")
-
-            try:
-                bucket = storage_client.get_bucket(bucket_name)
-            except Exception as e:
-                raise ValueError(f"Failed to access bucket {bucket_name}: {str(e)}")
+            # Initialize storage client
+            storage_client = storage.Client(credentials=settings.GS_CREDENTIALS)
+            bucket = storage_client.get_bucket(settings.GS_BUCKET_NAME)
             blob = bucket.blob(blob_name)
+
+            # Read and upload the file content
             content = file.read()
-            try:
-                blob.upload_from_string(
-                    content,
-                    content_type=content_type
-                )
-            except Exception as e:
-                raise ValueError(f"Failed to upload file: {str(e)}")
+            blob.upload_from_string(content, content_type=content_type)
 
-            try:
-                blob.make_public()
-            except Exception as e:
-                raise ValueError(f"Failed to make blob public: {str(e)}")
-
+            # Make the file publicly accessible
+            blob.make_public()
             return blob.public_url
-
         except Exception as e:
-            print(f"Error uploading file: {str(e)}")
-            raise
+            raise ValueError(f"Error uploading file: {e}")
 
     def gen_filename(self, filename):
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        ext = os.path.splitext(filename)[1].lower ()  # Convert extension to lowercase
+        ext = os.path.splitext(filename)[1].lower()
 
-        # Validate extension
-        ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
-        if ext not in ALLOWED_EXTENSIONS:
+        # Validate file extension
+        allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+        if ext not in allowed_extensions:
             raise ValueError("Invalid file extension")
 
         return f"{timestamp}{ext}"
 
     def save(self, commit=True):
-        instance = super().save(commit=False)
-        print(f"Saving instance with image: {instance.image}")
-        # Debug
-        if self.cleaned_data.get('image'):
-            image_file = self.cleaned_data['image']
-            dest_blob = f"{settings.GS_LOCATION}/games/images/{self.gen_filename(image_file.name)}"
-            public_url = self.upload_file(image_file.file, image_file.content_type, dest_blob)
-            instance.image = public_url
+        instance = super().save(commit=False)  # Create an instance without saving to the database
+        try:
+            # Check if a new image is uploaded
+            if 'image' in self.cleaned_data:
+                image_file = self.cleaned_data['image']
+                # Only handle new image uploads
+                if hasattr(image_file, 'content_type'):  # Check if it's a new file
+                    dest_blob = f"{settings.GS_LOCATION}/games/images/{self.gen_filename(image_file.name)}"
+                    public_url = self.upload_file(image_file, image_file.content_type, dest_blob)
+                    instance.image = public_url  # Update with the new uploaded image URL
 
-        if commit:
-            instance.save()
+            # Handle video and file fields similarly (if needed)
+            if 'video' in self.cleaned_data:
+                video_file = self.cleaned_data['video']
+                if hasattr(video_file, 'content_type'):
+                    dest_blob = f"{settings.GS_LOCATION}/games/videos/{self.gen_filename(video_file.name)}"
+                    public_url = self.upload_file(video_file, video_file.content_type, dest_blob)
+                    instance.video = public_url
+
+            if 'file' in self.cleaned_data:
+                file_file = self.cleaned_data['file']
+                if hasattr(file_file, 'content_type'):
+                    dest_blob = f"{settings.GS_LOCATION}/games/files/{self.gen_filename(file_file.name)}"
+                    public_url = self.upload_file(file_file, file_file.content_type, dest_blob)
+                    instance.file = public_url
+
+            # Save the instance
+            if commit:
+                instance.save()
+
+        except Exception as e:
+            print(f"ERROR: {e}")
+            raise ValueError(f"Failed to save game: {e}")
+
         return instance
-
-
-
 
     class Meta:
         model = Game

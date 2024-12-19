@@ -24,6 +24,7 @@ class CustomUser(AbstractUser):
     first_name = models.CharField(max_length=30, blank=True, null=True)  # Make it optional
     last_name = models.CharField(max_length=30, blank=True, null=True)  # Make it optional
 
+
     # Set the field used for authentication
     USERNAME_FIELD = 'username'  # This should be 'username' since you want to use it for login
     REQUIRED_FIELDS = ['email']  # You can add other fields required for creating superusers
@@ -50,8 +51,9 @@ class Game(models.Model):
     category = models.ManyToManyField('Category', through='GameCategory', blank=True)
     tags = models.ManyToManyField('Tag', through='GameTag', blank=True)
     steam_app_id = models.IntegerField(blank=True, null=True)
-    parent_game = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name="children")
+    parent_game = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name="dlcs")
     genre = models.TextField(max_length=255, default='empty')
+    hidden = models.BooleanField(default=False)
 
 
     def __str__(self):

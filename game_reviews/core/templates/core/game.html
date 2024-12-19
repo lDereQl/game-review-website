@@ -4,6 +4,13 @@
 
 {% block title %}{{ game.title }}{% endblock %}
 
+<form action="{% url 'toggle_game_visibility' game.id %}" method="post" style="display:inline;">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-warning">
+        {% if game.hidden %}Unhide Game{% else %}Hide Game{% endif %}
+    </button>
+</form>
+
 {% block content %}
 <h1>{{ game.title }}</h1>
 
@@ -24,6 +31,31 @@
     </div>
 </div>
 
+
+    <!-- Action Buttons -->
+    <div class="game-actions">
+        {% if user.is_authenticated and user.role == 'moderator' %}
+            <!-- Edit Game -->
+            <a href="{% url 'edit_game' game.id %}" class="btn btn-primary">Edit Game</a>
+
+            <!-- Hide Game -->
+            <form action="{% url 'hide_game' game.id %}" method="post" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-warning">Hide Game</button>
+            </form>
+        {% endif %}
+
+        {% if user.is_authenticated and user.role == 'admin' %}
+            <!-- Delete Game -->
+            <form action="{% url 'delete_game' game.id %}" method="post" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger">Delete Game</button>
+            </form>
+        {% endif %}
+    </div>
+</div>
+
+
 <h2>SteamDB Information</h2>
 {% if steam_info %}
     <ul>
@@ -36,15 +68,17 @@
 {% endif %}
 
 <h2>DLCs</h2>
-<ul>
-    {% for dlc in game.dlcs.all %}
-    <li>
-        <a href="{% url 'game_detail' dlc.id %}">{{ dlc.title }}</a>
-    </li>
-    {% empty %}
-    <li>No DLCs available.</li>
-    {% endfor %}
-</ul>
+{% if game.parent_game %}
+    <p>This is a DLC for: <a href="{% url 'game_detail' game.parent_game.id %}">{{ game.parent_game.title }}</a></p>
+{% else %}
+    <ul>
+        {% for dlc in dlcs %}
+            <li><a href="{% url 'game_detail' dlc.id %}">{{ dlc.title }}</a></li>
+        {% empty %}
+            <li>No DLCs available.</li>
+        {% endfor %}
+    </ul>
+{% endif %}
 
 <h2>Reviews</h2>
 <div class="review-section">
@@ -221,7 +255,7 @@
     </form>
 {% else %}
     <p>You need to <a href="{% url 'login' %}">log in</a> to comment on this game.</p>
-{% endif %}  
+{% endif %}
     <script>
 document.addEventListener("DOMContentLoaded", function() {
     // Add emoji picker functionality for all textareas
