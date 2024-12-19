@@ -1,4 +1,4 @@
-from django.db.models import Q
+from django.db.models import Q, Avg
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, authenticate, logout
@@ -330,19 +330,29 @@ def game_list(request):
     sort = request.GET.get('sort', 'title')  # Sorting field, default is 'title'
     order = request.GET.get('order', 'asc')  # Sorting order, default is ascending
 
+    # Filter games based on user role
+    if request.user.is_authenticated and request.user.role in ['admin', 'moderator']:
+        games = Game.objects.all()  # Admins and moderators can see all games
+    else:
+        games = Game.objects.filter(hidden=False)  # Other users see only non-hidden games
     # Search games by title, genre, platform, category, or tag
-    games = Game.objects.filter(
-        Q(title__icontains=query) |
-        Q(genre__icontains=query) |
-        Q(platform__platform_name__icontains=query) |
-        Q(category__category_name__icontains=query) |
-        Q(tags__tag_name__icontains=query)
-    ).distinct()
+    if query:
+        games = Game.objects.filter(
+            Q(title__icontains=query) |
+            Q(genre__icontains=query) |
+            Q(platform__platform_name__icontains=query) |
+            Q(category__category_name__icontains=query) |
+            Q(tags__tag_name__icontains=query)
+        ).distinct()
 
-    # Sorting logic
-    if order == 'desc':
-        sort = f"-{sort}"
-    games = games.order_by(sort)
+    if sort == "average_rating":
+        sort_field = "average_rating"
+    else:
+        sort_field = sort
+
+    if order == "desc":
+        sort_field = f"-{sort_field}"
+    games = games.order_by(sort_field)
 
     # Pagination
     paginator = Paginator(games, 10)  # 10 games per page

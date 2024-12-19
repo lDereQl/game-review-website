@@ -2,6 +2,9 @@ from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+
 
 
 # User model
@@ -56,20 +59,22 @@ class Game(models.Model):
     genre = models.TextField(max_length=255, default='empty')
     hidden = models.BooleanField(default=False)
 
-
+    average_rating = models.FloatField(default=0.0)
     def __str__(self):
         return self.title
 
     def __str__(self):
         return self.title
 
-    # Property to calculate the average rating for the game
-    @property
-    def average_rating(self):
+
+        # Add this method to update average_rating
+    def update_average_rating(self):
         reviews = self.reviews.all()
-        if reviews:
-            return sum(review.rating for review in reviews) / reviews.count()
-        return 0
+        if reviews.exists():
+            self.average_rating = sum(review.rating for review in reviews) / reviews.count()
+        else:
+            self.average_rating = 0.0
+        self.save()  # Save the updated value
 
 
 # Comment model
@@ -108,6 +113,18 @@ class Review(models.Model):
 
     def __str__(self):
         return self.title
+
+
+
+# Signal to update average_rating on review save
+@receiver(post_save, sender=Review)
+def update_game_average_rating_on_save(sender, instance, **kwargs):
+    instance.game.update_average_rating()
+
+# Signal to update average_rating on review delete
+@receiver(post_delete, sender=Review)
+def update_game_average_rating_on_delete(sender, instance, **kwargs):
+    instance.game.update_average_rating()
 
 
 # Tag model
