@@ -3,15 +3,16 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib import messages
-from django.http import HttpResponseForbidden,JsonResponse
-from .forms import CustomUserCreationForm, GameForm, CustomUserEditForm, CommentForm, ReviewForm, RoleChangeForm, FileUploadForm
+from django.http import HttpResponseForbidden, JsonResponse
+from .forms import CustomUserCreationForm, GameForm, CustomUserEditForm, CommentForm, ReviewForm, RoleChangeForm, \
+    FileUploadForm
 from .models import Game, Review, Comment, CustomUser, Like
 from .utils import get_game_info, upload_to_storage
 import requests
 from django.contrib.auth.models import User
 from django.db.utils import IntegrityError
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger 
-from .utils import  upload_image_to_storage, verify_id_image
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from .utils import upload_image_to_storage, verify_id_image
 
 
 def home(request):
@@ -182,6 +183,7 @@ def verify_critic(request):
 
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
+
 def game_detail(request, game_id):
     game = get_object_or_404(Game, id=game_id)
     steam_info = get_game_info(game.steam_app_id)
@@ -261,9 +263,6 @@ def game_detail(request, game_id):
         'comments_per_page': comments_per_page,
     }
     return render(request, 'core/game.html', context)
-
-
-
 
 
 @login_required
@@ -503,3 +502,73 @@ def import_steam_comments(request, game_id):
         messages.error(request, f"Failed to fetch Steam comments: {str(e)}")
 
     return redirect('game_detail', game_id=game.id)
+
+
+@login_required
+def vote_review(request, review_id, vote_type):
+    review = get_object_or_404(Review, id=review_id)
+
+    if review.has_voted(request.user):
+        return HttpResponseForbidden("You have already voted on this review.")
+
+    if vote_type == "up":
+        review.helpful_votes += 1
+    elif vote_type == "down":
+        review.helpful_votes -= 1
+
+    review.voters.add(request.user)
+    review.save()
+
+    return redirect("game_detail", game_id=review.game.id)
+
+@login_required
+def edit_review(request, review_id):
+    review = get_object_or_404(Review, id=review_id)
+
+    # Ensure the user is authorized to edit this review
+    if request.user.role != 'critic' or review.user != request.user:
+        return HttpResponseForbidden("You are not allowed to edit this review.")
+
+    if request.method == "POST":
+        form = ReviewForm(request.POST, instance=review)
+        if form.is_valid():
+            form.save()
+            return redirect('game_detail', game_id=review.game.id)
+    else:
+        form = ReviewForm(instance=review)
+
+    return render(request, 'core/edit_review.html', {'form': form, 'review': review})
+
+
+@login_required
+def delete_review(request, review_id):
+    review = get_object_or_404(Review, id=review_id)
+
+    # Ensure only moderators can delete reviews
+    if request.user.role != 'moderator':
+        return HttpResponseForbidden("You are not authorized to delete this review.")
+
+    if request.method == "POST":
+        review.delete()
+        return redirect('game_detail', game_id=review.game.id)
+
+    return render(request, 'core/delete_review_confirm.html', {'review': review})
+
+
+
+@login_required
+def ban_user(request, user_id):
+    if request.user.role != 'admin':
+        return HttpResponseForbidden("You are not authorized to ban users.")
+
+    user = get_object_or_404(CustomUser, id=user_id)
+
+    # Prevent banning other admins
+    if user.role == 'admin':
+        messages.error(request, "You cannot ban an admin.")
+        return redirect('user_list')
+
+    user.banned = True
+    user.save()
+    messages.success(request, f"{user.username} has been banned successfully.")
+    return redirect('user_list')

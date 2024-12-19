@@ -27,4 +27,9 @@ urlpatterns = [
     path('comments/edit/<int:comment_id>/', views.edit_comment, name='edit_comment'),
     path('comments/<int:comment_id>/like/', views.like_comment, name='like_comment'),
     path('game/<int:game_id>/import_steam_comments/', views.import_steam_comments, name='import_steam_comments'),
+    path('reviews/<int:review_id>/vote/<str:vote_type>/', views.vote_review, name='vote_review'),
+    path('reviews/<int:review_id>/edit/', views.edit_review, name='edit_review'),
+    path('reviews/<int:review_id>/delete/', views.delete_review, name='delete_review'),
+    path('adminas/ban_user/<int:user_id>/', views.ban_user, name='ban_user'),
+
 ]

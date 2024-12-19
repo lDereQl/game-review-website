@@ -12,6 +12,7 @@
   <tr>
     <th>Username</th>
     <th>Role</th>
+    <th>Status</th>
     <th>Actions</th>
   </tr>
   </thead>
@@ -21,8 +22,18 @@
     <td>{{ user.username }}</td>
     <td>{{ user.role }}</td>
     <td>
+      {% if user.banned %}
+        <span style="color: red;">Banned</span>
+      {% else %}
+        <span style="color: green;">Active</span>
+      {% endif %}
+    </td>
+    <td>
       <a href="{% url 'account_details' user.id %}">View</a> |
       <a href="{% url 'update_user_role' user.id %}">Edit Role</a>
+      {% if user.role != 'admin' and not user.banned %}
+      | <a href="{% url 'ban_user' user.id %}" style="color: red;">Ban</a>
+      {% endif %}
     </td>
   </tr>
   {% endfor %}
